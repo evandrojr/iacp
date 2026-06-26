@@ -1,0 +1,63 @@
+{
+  "server": {
+    "port": 1313,
+    "host": "0.0.0.0",
+    "log_level": "info",
+    "max_concurrent": 0,
+    "timeout_sec": 0
+  },
+  "retry": {
+    "max_attempts": 3,
+    "delay_ms": 1000
+  },
+  "providers": [
+    {
+      "name": "openrouter",
+      "enabled": true,
+      "priority": 1,
+      "max_concurrent": 0,
+      "base_url": "https://openrouter.ai/api/v1",
+      "api_keys_string": "${OPENROUTER_KEYS}",
+      "default_model": "google/gemini-2.5-flash-preview-04-17:free",
+      "models": [
+        "google/gemini-2.5-flash-preview-04-17:free",
+        "google/gemini-2.0-flash-exp:free",
+        "meta-llama/llama-3.3-70b-instruct:free",
+        "anthropic/claude-3-haiku:free"
+      ],
+      "headers": {
+        "HTTP-Referer": "http://localhost:1313",
+        "X-Title": "AI-gatiator"
+      }
+    },
+    {
+      "name": "groq",
+      "enabled": false,
+      "priority": 2,
+      "max_concurrent": 0,
+      "base_url": "https://api.groq.com/openai/v1",
+      "api_keys_string": "${GROQ_KEYS}",
+      "default_model": "llama-3.1-8b-instant",
+      "models": [
+        "llama-3.1-8b-instant",
+        "llama-3.3-70b-versatile"
+      ],
+      "headers": {}
+    },
+    {
+      "name": "google",
+      "enabled": false,
+      "priority": 3,
+      "max_concurrent": 0,
+      "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
+      "api_keys_string": "${GOOGLE_KEYS}",
+      "default_model": "gemini-2.0-flash",
+      "models": [
+        "gemini-2.0-flash",
+        "gemini-2.5-flash-preview-04-17",
+        "gemini-1.5-flash"
+      ],
+      "headers": {}
+    }
+  ]
+}
