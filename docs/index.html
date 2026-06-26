@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>iacp — Intelligent Add Commit Push</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --fg: #c9d1d9;
+      --accent: #58a6ff;
+      --green: #3fb950;
+      --purple: #bc8cff;
+      --border: #30363d;
+      --card: #161b22;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      line-height: 1.6;
+    }
+    .container { max-width: 800px; margin: 0 auto; padding: 0 24px; }
+
+    /* Hero */
+    .hero {
+      padding: 80px 0 60px;
+      text-align: center;
+      border-bottom: 1px solid var(--border);
+    }
+    .hero h1 {
+      font-size: 3rem;
+      font-weight: 700;
+      color: #fff;
+      letter-spacing: -0.02em;
+    }
+    .hero h1 span { color: var(--accent); }
+    .hero .subtitle {
+      font-size: 1.15rem;
+      color: #8b949e;
+      margin-top: 12px;
+      max-width: 540px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .hero .badges { margin-top: 24px; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+    .hero .badges img { height: 20px; }
+
+    /* Terminal mock */
+    .terminal {
+      background: #1c2128;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin: 40px auto 0;
+      max-width: 600px;
+      text-align: left;
+      font-family: "SF Mono", "Fira Code", "Consolas", monospace;
+      font-size: 0.85rem;
+      overflow: hidden;
+    }
+    .terminal .bar {
+      display: flex; align-items: center; gap: 6px; padding: 10px 14px;
+      background: #2d333b; border-bottom: 1px solid var(--border);
+    }
+    .terminal .bar .dot { width: 10px; height: 10px; border-radius: 50%; }
+    .terminal .bar .dot.r { background: #f85149; }
+    .terminal .bar .dot.y { background: #d29922; }
+    .terminal .bar .dot.g { background: #3fb950; }
+    .terminal .body { padding: 16px 14px; }
+    .terminal .body .prompt { color: var(--green); }
+    .terminal .body .diff-add { color: var(--green); }
+    .terminal .body .diff-del { color: #f85149; }
+    .terminal .body .ai { color: var(--purple); }
+
+    /* Sections */
+    section { padding: 60px 0; border-bottom: 1px solid var(--border); }
+    section:last-of-type { border-bottom: none; }
+    h2 {
+      font-size: 1.5rem; font-weight: 600; color: #fff;
+      margin-bottom: 24px;
+    }
+    h3 { font-size: 1.1rem; font-weight: 600; color: #fff; margin-bottom: 8px; }
+
+    /* Feature grid */
+    .features { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    @media (max-width: 600px) { .features { grid-template-columns: 1fr; } }
+    .feature {
+      background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+      padding: 20px;
+    }
+    .feature .icon { font-size: 1.4rem; margin-bottom: 8px; }
+    .feature p { color: #8b949e; font-size: 0.9rem; margin-top: 4px; }
+
+    /* Code blocks */
+    code, pre {
+      font-family: "SF Mono", "Fira Code", "Consolas", monospace;
+      font-size: 0.85rem;
+    }
+    pre {
+      background: #1c2128; border: 1px solid var(--border); border-radius: 6px;
+      padding: 14px 16px; overflow-x: auto; margin: 12px 0;
+    }
+    code { background: #1c2128; padding: 2px 6px; border-radius: 4px; }
+    pre code { background: none; padding: 0; }
+    .hl-comment { color: #8b949e; }
+    .hl-keyword { color: var(--purple); }
+    .hl-string { color: #a5d6ff; }
+
+    /* Provider cards */
+    .providers { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+    @media (max-width: 640px) { .providers { grid-template-columns: 1fr; } }
+    .provider {
+      background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+      padding: 20px; text-align: center;
+    }
+    .provider h3 { margin-bottom: 4px; }
+    .provider p { color: #8b949e; font-size: 0.85rem; }
+    .provider .tag {
+      display: inline-block; font-size: 0.7rem; font-weight: 600; text-transform: uppercase;
+      padding: 2px 8px; border-radius: 10px; margin-top: 8px;
+    }
+    .tag.local { background: rgba(60,185,80,0.15); color: var(--green); }
+    .tag.cloud { background: rgba(88,166,255,0.15); color: var(--accent); }
+
+    /* Footer */
+    footer {
+      text-align: center; padding: 32px 0; color: #484f58; font-size: 0.85rem;
+    }
+    footer a { color: var(--accent); text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
+
+    /* Buttons */
+    .btn {
+      display: inline-block; padding: 10px 24px; border-radius: 6px;
+      font-weight: 600; font-size: 0.95rem; text-decoration: none;
+      transition: background 0.2s;
+    }
+    .btn-primary { background: #238636; color: #fff; }
+    .btn-primary:hover { background: #2ea043; }
+    .btn-outline { border: 1px solid var(--border); color: var(--fg); }
+    .btn-outline:hover { border-color: var(--fg); }
+    .hero .btns { margin-top: 28px; display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+
+    .steps { list-style: none; }
+    .steps li {
+      padding: 12px 0 12px 36px; position: relative; border-bottom: 1px solid var(--border);
+    }
+    .steps li:last-child { border-bottom: none; }
+    .steps li::before {
+      content: attr(data-num);
+      position: absolute; left: 0; top: 12px;
+      width: 24px; height: 24px; border-radius: 50%;
+      background: var(--accent); color: #000;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.75rem; font-weight: 700;
+    }
+  </style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="container">
+    <h1><span>iacp</span> — Intelligent Add Commit Push</h1>
+    <p class="subtitle">
+      AI-powered Git automation for your terminal. Stage, generate smart commit messages,
+      and push — all in one command.
+    </p>
+    <div class="badges">
+      <img src="https://img.shields.io/badge/go-1.26.1-00ADD8?logo=go" alt="Go version">
+      <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
+    </div>
+    <div class="btns">
+      <a class="btn btn-primary" href="https://github.com/evandrojr/iacp">View on GitHub</a>
+      <a class="btn btn-outline" href="#usage">Get started</a>
+    </div>
+
+    <div class="terminal">
+      <div class="bar">
+        <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+        <span style="margin-left:auto;color:#8b949e;font-size:0.75rem">iacp</span>
+      </div>
+      <div class="body">
+        <span class="prompt">$</span> iacp<br>
+        <span style="color:#8b949e">--- Current Changes ---</span><br>
+        <span class="diff-add">+ func calculateTotal(items []Item) float64 {</span><br>
+        <span class="diff-del">- func oldCalc(items []Item) float64 {</span><br>
+        <span style="color:#8b949e">-----------------------</span><br>
+        Generating commit message...<br>
+        <span class="ai">feat: replace oldCalc with calculateTotal using new pricing logic</span><br>
+        <span style="color:#8b949e">--- Review Message ---</span><br>
+        <span class="ai">feat: replace oldCalc with calculateTotal using new pricing logic</span><br>
+        Proceed with commit and push? (Y/n): <span style="color:var(--green)">y</span><br>
+        Pulling... Pushing... Done!<br>
+      </div>
+    </div>
+  </div>
+</div>
+
+<section>
+  <div class="container">
+    <h2>Features</h2>
+    <div class="features">
+      <div class="feature">
+        <div class="icon">🤖</div>
+        <h3>AI-Generated Messages</h3>
+        <p>Your git diff is analyzed by a local or remote LLM to produce clear, conventional commit messages.</p>
+      </div>
+      <div class="feature">
+        <div class="icon">🔌</div>
+        <h3>Multi-Provider</h3>
+        <p>Supports llama.cpp, Ollama, and AI-gatiator cloud gateway — switch freely between local and cloud models.</p>
+      </div>
+      <div class="feature">
+        <div class="icon">🎨</div>
+        <h3>TUI Model Selector</h3>
+        <p>Run <code>iacp -s</code> to browse and select AI models through a beautiful Bubble Tea terminal interface.</p>
+      </div>
+      <div class="feature">
+        <div class="icon">⚡</div>
+        <h3>Fast Mode</h3>
+        <p>Use <code>iacp -f</code> to skip the editor and commit instantly — ideal for quick, safe changes.</p>
+      </div>
+      <div class="feature">
+        <div class="icon">🛡️</div>
+        <h3>Context-Aware</h3>
+        <p>Displays model context limits and warns you before the diff exceeds them. Suggests switching models when needed.</p>
+      </div>
+      <div class="feature">
+        <div class="icon">🔍</div>
+        <h3>Diff Preview</h3>
+        <p>See your staged changes side-by-side with the generated message before committing.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="container">
+    <h2>Supported AI Providers</h2>
+    <div class="providers">
+      <div class="provider">
+        <h3>llama.cpp</h3>
+        <p>Run GGUF models locally on your machine.</p>
+        <span class="tag local">Local</span>
+      </div>
+      <div class="provider">
+        <h3>Ollama</h3>
+        <p>Use any model from your local Ollama instance.</p>
+        <span class="tag local">Local</span>
+      </div>
+      <div class="provider">
+        <h3>AI-gatiator</h3>
+        <p>Free cloud models via a local gateway — Gemini, Llama, Minimax and more.</p>
+        <span class="tag cloud">Cloud</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="usage">
+  <div class="container">
+    <h2>Quick Start</h2>
+    <h3>Install</h3>
+    <pre><code>git clone https://github.com/evandrojr/iacp.git
+cd iacp
+go build -o iacp main.go
+cp iacp ~/bin/</code></pre>
+
+    <h3>Usage</h3>
+    <ol class="steps">
+      <li data-num="1">Select your AI model: <code>iacp -s</code></li>
+      <li data-num="2">Make some changes in your repo, then run <code>iacp</code></li>
+      <li data-num="3">Review the AI-suggested message in the TUI editor, or use <code>iacp -f</code> for instant commits</li>
+    </ol>
+
+    <h3 style="margin-top:24px">Example</h3>
+    <pre><code><span class="hl-comment"># Select a model (first time)</span>
+$ iacp -s
+
+<span class="hl-comment"># Stage, generate, commit & push</span>
+$ iacp</code></pre>
+  </div>
+</section>
+
+<section>
+  <div class="container">
+    <h2>Configuration</h2>
+    <p>Your settings are stored in <code>~/.config/iacp/config.json</code>. You can edit it directly or use <code>iacp -s</code> to switch models interactively.</p>
+    <pre><code>{
+  <span class="hl-keyword">"provider"</span>:      <span class="hl-string">"ollama"</span>,
+  <span class="hl-keyword">"model_path"</span>:    <span class="hl-string">"llama3.2"</span>,
+  <span class="hl-keyword">"context_limit"</span>: <span class="hl-string">8192</span>
+}</code></pre>
+  </div>
+</section>
+
+<footer>
+  <div class="container">
+    Built with <a href="https://go.dev">Go</a> &middot;
+    <a href="https://github.com/evandrojr/iacp">GitHub</a> &middot;
+    MIT License
+  </div>
+</footer>
+
+</body>
+</html>

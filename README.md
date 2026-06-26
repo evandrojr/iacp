@@ -1,5 +1,7 @@
 # iacp - Intelligent Add Commit Push
 
+[![GitHub Pages](https://img.shields.io/badge/site-iacp-58a6ff?logo=github)](https://evandrojr.github.io/iacp/)
+
 `iacp` is a Go-based CLI tool that automates the standard Git workflow (`add`, `commit`, `pull`, `push`) while using local or cloud-based AI models to generate meaningful commit messages based on your current changes.
 
 ## Features
@@ -11,7 +13,7 @@
 - **TUI Model Selector**: Run `iacp -s` to select your preferred AI provider and model using a beautiful terminal interface (Bubble Tea).
 - **Context Awareness**: Displays model context limits and warns you if your `git diff` might exceed them, suggesting alternative models.
 - **Diff Preview**: Shows your staged changes before processing, so you know exactly what the AI is describing.
-- **Interactive Review**: Automatically opens your favorite editor (from `$EDITOR` or `vi`) to let you refine the generated message.
+- **Interactive Review**: Opens a built-in TUI editor (Bubble Tea) to refine the generated message before committing.
 - **Fast Mode**: Use the `-f` flag to bypass the editor and commit/push instantly (enforces a 10-character minimum).
 - **Safety First**: Supports `Ctrl+C` to gracefully terminate AI generation and sub-processes.
 
@@ -50,8 +52,8 @@ iacp
 - Stages all changes (`git add -A .`).
 - Shows the diff.
 - Generates a suggested commit message using your selected AI.
-- Opens your editor for review.
-- After saving and closing the editor, it runs `git commit`, `git pull`, and `git push`.
+- Opens a TUI editor for review.
+- After confirming the message, it runs `git commit`, `git pull`, and `git push`.
 
 ### 3. Force Mode (Instant Commit)
 ```bash
