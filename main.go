@@ -101,7 +101,17 @@ func main() {
 	}
 
 	if !*force {
-		commitMsg = editMessage(commitMsg)
+		commitMsg = editMessage(ctx, commitMsg)
+		fmt.Println(lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Render("\n--- Final Commit Message ---"))
+		fmt.Println(commitMsg)
+		fmt.Println(lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Render("----------------------------"))
+		fmt.Print("Proceed with commit and push? (Y/n): ")
+		var confirm string
+		fmt.Scanln(&confirm)
+		if confirm != "" && strings.ToLower(confirm) != "y" {
+			fmt.Println("Aborted by user.")
+			os.Exit(0)
+		}
 	} else {
 		commitMsg = strings.TrimSpace(commitMsg)
 		if len(commitMsg) < 10 {
@@ -224,7 +234,7 @@ func cleanAIOutput(result string) string {
 	return cleaned[len(cleaned)-1]
 }
 
-func editMessage(initialMsg string) string {
+func editMessage(ctx context.Context, initialMsg string) string {
 	tmpFile, err := os.CreateTemp("", "iacp-commit-*.txt")
 	if err != nil {
 		fmt.Printf("Error creating temp file: %v\n", err)
@@ -248,14 +258,19 @@ func editMessage(initialMsg string) string {
 	editorCmd := parts[0]
 	editorArgs := append(parts[1:], tmpFile.Name())
 
-	cmd := exec.Command(editorCmd, editorArgs...)
+	fmt.Printf("Opening editor: %s... (waiting for close)\n", editorFull)
+	cmd := exec.CommandContext(ctx, editorCmd, editorArgs...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	
 	// Start and wait for the editor to finish
 	if err := cmd.Run(); err != nil {
+		if ctx.Err() == context.Canceled {
+			return initialMsg
+		}
 		fmt.Printf("Error running editor %s: %v\n", editorFull, err)
+		fmt.Println("Tip: If you use a GUI editor like VS Code, ensure it's configured to wait (e.g., EDITOR='code --wait')")
 		return initialMsg
 	}
 
