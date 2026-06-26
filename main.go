@@ -66,6 +66,17 @@ func main() {
 
 	config := loadConfig(configPath)
 	
+	// Show currently used model
+	modelName := config.ModelPath
+	if modelName == "" {
+		if config.Provider == "gatiator" {
+			modelName = "Auto-routed"
+		} else {
+			modelName = "Default"
+		}
+	}
+	fmt.Printf(lipgloss.NewStyle().Foreground(lipgloss.Color("5")).Render("Using AI: %s (%s)\n"), modelName, config.Provider)
+	
 	// Check context
 	diffSize := len(diff)
 	// Estimation: 1 token approx 4 chars. So context limit in chars is contextLimit * 4.
