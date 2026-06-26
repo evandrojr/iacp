@@ -95,22 +95,44 @@ func main() {
 
 	fmt.Println("Generating commit message...")
 	commitMsg := generateCommitMessage(ctx, diff, config)
-	if commitMsg == "" {
-		fmt.Println("Failed to generate commit message.")
+	if commitMsg == "" || strings.Contains(commitMsg, "Gatiator") || strings.Contains(commitMsg, "indisponíveis") {
+		if commitMsg != "" {
+			fmt.Printf(lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Render("AI Error: %s\n"), commitMsg)
+		} else {
+			fmt.Println("Failed to generate commit message.")
+		}
+		
+		if config.Provider == "gatiator" {
+			fmt.Println(lipgloss.NewStyle().Foreground(lipgloss.Color("11")).Render("\nTip: Gatiator (Cloud) seems to be offline or unavailable."))
+			fmt.Println("Suggested: Run 'iacp -s' and select a LOCAL model (llama.cpp or ollama) to continue.")
+		}
 		os.Exit(1)
 	}
 
 	if !*force {
-		commitMsg = editMessage(ctx, commitMsg)
-		fmt.Println(lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Render("\n--- Final Commit Message ---"))
+		var tmpFilePath string
+		commitMsg, tmpFilePath = editMessage(ctx, commitMsg)
+		defer os.Remove(tmpFilePath)
+
+		fmt.Println(lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Render("\n--- Review Message ---"))
 		fmt.Println(commitMsg)
-		fmt.Println(lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Render("----------------------------"))
+		fmt.Println(lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Render("----------------------"))
+		fmt.Println("Tip: If you are using a GUI editor, make sure to SAVE before confirming.")
 		fmt.Print("Proceed with commit and push? (Y/n): ")
+		
 		var confirm string
 		fmt.Scanln(&confirm)
 		if confirm != "" && strings.ToLower(confirm) != "y" {
 			fmt.Println("Aborted by user.")
 			os.Exit(0)
+		}
+
+		// Re-read the file AFTER confirmation to catch last-second saves in GUI editors
+		if tmpFilePath != "" {
+			content, err := os.ReadFile(tmpFilePath)
+			if err == nil && len(strings.TrimSpace(string(content))) > 0 {
+				commitMsg = string(content)
+			}
 		}
 	} else {
 		commitMsg = strings.TrimSpace(commitMsg)
@@ -209,15 +231,23 @@ func callGatiator(ctx context.Context, prompt, modelName string) string {
 	cmd := exec.CommandContext(ctx, "curl", "-s", "-X", "POST", "http://localhost:1313/v1/chat/completions", "-H", "Content-Type: application/json", "-d", string(jsonData))
 	req, err := cmd.Output()
 	if err != nil {
-		return "feat: updates (Gatiator connection error)"
+		return "Gatiator connection error"
 	}
+
+	// Check for API error response first
+	var errRes struct {
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal(req, &errRes); err == nil && errRes.Error != "" {
+		return errRes.Error
+	}
+
 	var res struct{ Choices []struct{ Message struct{ Content string } } }
 	if err := json.Unmarshal(req, &res); err != nil || len(res.Choices) == 0 {
-		return "feat: updates (Gatiator API response error)"
+		return "Gatiator API response error"
 	}
 	return strings.TrimSpace(res.Choices[0].Message.Content)
 }
-
 func cleanAIOutput(result string) string {
 	lines := strings.Split(result, "\n")
 	var cleaned []string
@@ -234,17 +264,18 @@ func cleanAIOutput(result string) string {
 	return cleaned[len(cleaned)-1]
 }
 
-func editMessage(ctx context.Context, initialMsg string) string {
+func editMessage(ctx context.Context, initialMsg string) (string, string) {
 	tmpFile, err := os.CreateTemp("", "iacp-commit-*.txt")
 	if err != nil {
 		fmt.Printf("Error creating temp file: %v\n", err)
-		return initialMsg
+		return initialMsg, ""
 	}
-	defer os.Remove(tmpFile.Name())
+	// Note: Removal is handled by the caller now
+	// defer os.Remove(tmpFile.Name())
 
 	if _, err := tmpFile.WriteString(initialMsg); err != nil {
 		fmt.Printf("Error writing to temp file: %v\n", err)
-		return initialMsg
+		return initialMsg, tmpFile.Name()
 	}
 	tmpFile.Close()
 
@@ -267,20 +298,20 @@ func editMessage(ctx context.Context, initialMsg string) string {
 	// Start and wait for the editor to finish
 	if err := cmd.Run(); err != nil {
 		if ctx.Err() == context.Canceled {
-			return initialMsg
+			return initialMsg, tmpFile.Name()
 		}
 		fmt.Printf("Error running editor %s: %v\n", editorFull, err)
 		fmt.Println("Tip: If you use a GUI editor like VS Code, ensure it's configured to wait (e.g., EDITOR='code --wait')")
-		return initialMsg
+		// Continue anyway to read what's there
 	}
 
 	content, err := os.ReadFile(tmpFile.Name())
 	if err != nil {
 		fmt.Printf("Error reading temp file: %v\n", err)
-		return initialMsg
+		return initialMsg, tmpFile.Name()
 	}
 
-	return string(content)
+	return string(content), tmpFile.Name()
 }
 
 type item struct {
