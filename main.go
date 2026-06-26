@@ -110,14 +110,11 @@ func main() {
 	}
 
 	if !*force {
-		var tmpFilePath string
-		commitMsg, tmpFilePath = editMessage(ctx, commitMsg)
-		defer os.Remove(tmpFilePath)
+		commitMsg, _ = editMessage(ctx, commitMsg)
 
 		fmt.Println(lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Render("\n--- Review Message ---"))
 		fmt.Println(commitMsg)
 		fmt.Println(lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Render("----------------------"))
-		fmt.Println("Tip: If you are using a GUI editor, make sure to SAVE before confirming.")
 		fmt.Print("Proceed with commit and push? (Y/n): ")
 		
 		var confirm string
@@ -125,14 +122,6 @@ func main() {
 		if confirm != "" && strings.ToLower(confirm) != "y" {
 			fmt.Println("Aborted by user.")
 			os.Exit(0)
-		}
-
-		// Re-read the file AFTER confirmation to catch last-second saves in GUI editors
-		if tmpFilePath != "" {
-			content, err := os.ReadFile(tmpFilePath)
-			if err == nil && len(strings.TrimSpace(string(content))) > 0 {
-				commitMsg = string(content)
-			}
 		}
 	} else {
 		commitMsg = strings.TrimSpace(commitMsg)
@@ -264,54 +253,141 @@ func cleanAIOutput(result string) string {
 	return cleaned[len(cleaned)-1]
 }
 
+type commitEditor struct {
+	text      []string
+	cursorRow int
+	cursorCol int
+	done      bool
+	confirmed bool
+}
+
+func (m commitEditor) Init() tea.Cmd { return nil }
+
+func (m commitEditor) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "ctrl+c", "esc":
+			m.done = true
+			m.confirmed = false
+			return m, tea.Quit
+		case "ctrl+s", "f2":
+			m.done = true
+			m.confirmed = true
+			return m, tea.Quit
+		case "enter":
+			line := m.text[m.cursorRow]
+			before := line[:m.cursorCol]
+			after := line[m.cursorCol:]
+			m.text[m.cursorRow] = before
+			newLines := make([]string, len(m.text)+1)
+			copy(newLines, m.text[:m.cursorRow+1])
+			newLines[m.cursorRow+1] = after
+			copy(newLines[m.cursorRow+2:], m.text[m.cursorRow+1:])
+			m.text = newLines
+			m.cursorRow++
+			m.cursorCol = 0
+		case "backspace":
+			if m.cursorCol > 0 {
+				line := m.text[m.cursorRow]
+				m.text[m.cursorRow] = line[:m.cursorCol-1] + line[m.cursorCol:]
+				m.cursorCol--
+			} else if m.cursorRow > 0 {
+				prevLen := len(m.text[m.cursorRow-1])
+				m.text[m.cursorRow-1] += m.text[m.cursorRow]
+				m.text = append(m.text[:m.cursorRow], m.text[m.cursorRow+1:]...)
+				m.cursorRow--
+				m.cursorCol = prevLen
+			}
+		case "delete":
+			line := m.text[m.cursorRow]
+			if m.cursorCol < len(line) {
+				m.text[m.cursorRow] = line[:m.cursorCol] + line[m.cursorCol+1:]
+			} else if m.cursorRow < len(m.text)-1 {
+				m.text[m.cursorRow] += m.text[m.cursorRow+1]
+				m.text = append(m.text[:m.cursorRow+1], m.text[m.cursorRow+2:]...)
+			}
+		case "up":
+			if m.cursorRow > 0 {
+				m.cursorRow--
+				if m.cursorCol > len(m.text[m.cursorRow]) {
+					m.cursorCol = len(m.text[m.cursorRow])
+				}
+			}
+		case "down":
+			if m.cursorRow < len(m.text)-1 {
+				m.cursorRow++
+				if m.cursorCol > len(m.text[m.cursorRow]) {
+					m.cursorCol = len(m.text[m.cursorRow])
+				}
+			}
+		case "left":
+			if m.cursorCol > 0 {
+				m.cursorCol--
+			} else if m.cursorRow > 0 {
+				m.cursorRow--
+				m.cursorCol = len(m.text[m.cursorRow])
+			}
+		case "right":
+			if m.cursorCol < len(m.text[m.cursorRow]) {
+				m.cursorCol++
+			} else if m.cursorRow < len(m.text)-1 {
+				m.cursorRow++
+				m.cursorCol = 0
+			}
+		case "home":
+			m.cursorCol = 0
+		case "end":
+			m.cursorCol = len(m.text[m.cursorRow])
+		default:
+			if len(msg.String()) == 1 {
+				line := m.text[m.cursorRow]
+				m.text[m.cursorRow] = line[:m.cursorCol] + msg.String() + line[m.cursorCol:]
+				m.cursorCol++
+			}
+		}
+	}
+	return m, nil
+}
+
+func (m commitEditor) View() string {
+	var b strings.Builder
+	b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Render("--- Edit Commit Message (Ctrl+S: confirm, Esc: cancel) ---\n"))
+	for i, line := range m.text {
+		if i == m.cursorRow {
+			before := line[:m.cursorCol]
+			if m.cursorCol < len(line) {
+				cursor := string(line[m.cursorCol])
+				after := line[m.cursorCol+1:]
+				b.WriteString(before)
+				b.WriteString(lipgloss.NewStyle().Background(lipgloss.Color("4")).Render(cursor))
+				b.WriteString(after)
+			} else {
+				b.WriteString(before)
+				b.WriteString(lipgloss.NewStyle().Background(lipgloss.Color("4")).Render(" "))
+			}
+		} else {
+			b.WriteString(line)
+		}
+		b.WriteString("\n")
+	}
+	b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Render("Ctrl+S: confirm  |  Esc: cancel  |  arrows: navigate"))
+	return b.String()
+}
+
 func editMessage(ctx context.Context, initialMsg string) (string, string) {
-	tmpFile, err := os.CreateTemp("", "iacp-commit-*.txt")
+	lines := strings.Split(initialMsg, "\n")
+	p := tea.NewProgram(commitEditor{text: lines})
+	m, err := p.Run()
 	if err != nil {
-		fmt.Printf("Error creating temp file: %v\n", err)
 		return initialMsg, ""
 	}
-	// Note: Removal is handled by the caller now
-	// defer os.Remove(tmpFile.Name())
-
-	if _, err := tmpFile.WriteString(initialMsg); err != nil {
-		fmt.Printf("Error writing to temp file: %v\n", err)
-		return initialMsg, tmpFile.Name()
+	editor := m.(commitEditor)
+	if !editor.confirmed {
+		fmt.Println(lipgloss.NewStyle().Foreground(lipgloss.Color("11")).Render("Edit cancelled, using original message."))
+		return initialMsg, ""
 	}
-	tmpFile.Close()
-
-	editorFull := os.Getenv("EDITOR")
-	if editorFull == "" {
-		editorFull = "vi"
-	}
-
-	// Split editor command to handle cases like EDITOR="code --wait"
-	parts := strings.Fields(editorFull)
-	editorCmd := parts[0]
-	editorArgs := append(parts[1:], tmpFile.Name())
-
-	fmt.Printf("Opening editor: %s... (waiting for close)\n", editorFull)
-	cmd := exec.CommandContext(ctx, editorCmd, editorArgs...)
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	
-	// Start and wait for the editor to finish
-	if err := cmd.Run(); err != nil {
-		if ctx.Err() == context.Canceled {
-			return initialMsg, tmpFile.Name()
-		}
-		fmt.Printf("Error running editor %s: %v\n", editorFull, err)
-		fmt.Println("Tip: If you use a GUI editor like VS Code, ensure it's configured to wait (e.g., EDITOR='code --wait')")
-		// Continue anyway to read what's there
-	}
-
-	content, err := os.ReadFile(tmpFile.Name())
-	if err != nil {
-		fmt.Printf("Error reading temp file: %v\n", err)
-		return initialMsg, tmpFile.Name()
-	}
-
-	return string(content), tmpFile.Name()
+	return strings.Join(editor.text, "\n"), ""
 }
 
 type item struct {
